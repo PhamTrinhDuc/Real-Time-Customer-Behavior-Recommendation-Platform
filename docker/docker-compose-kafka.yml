@@ -1,0 +1,194 @@
+---
+version: '3.8'
+services:
+  # ZOOKEEPER - Quản lý trung tâm cho Kafka
+  # Vai trò: Giống như "người điều khiển giao thông" cho hệ thống Kafka
+  # - Theo dõi xem broker nào đang hoạt động
+  # - Quyết định ai là "leader" cho mỗi partition
+  # - Lưu trữ thông tin cấu hình của toàn bộ hệ thống
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper
+    ports:
+      - "${ZOOKEEPER_PORT}:${ZOOKEEPER_PORT}" # Cổng 2181 để các service khác kết nối (host_port:container_port)
+    healthcheck:
+      test: echo srvr | nc zookeeper ${ZOOKEEPER_PORT} || exit 1
+      start_period: 10s  # Đợi 10 giây trước khi bắt đầu kiểm tra
+      retries: 20        # Thử lại 20 lần nếu lỗi
+      interval: 10s      # Kiểm tra mỗi 10 giây
+    env_file:
+      - env/.env.kafka
+
+  # KAFKA BROKER - Máy chủ lưu trữ dữ liệu
+  # Vai trò: Giống như "kho hàng" nhận và gửi tin nhắn
+  # - Nhận tin nhắn từ producer
+  # - Lưu trữ tin nhắn trong các topic
+  # - Gửi tin nhắn cho consumer
+  broker:
+    image: confluentinc/cp-server:7.5.0
+    container_name: broker
+    depends_on:
+      zookeeper:
+        condition: service_healthy # Phải đợi Zookeeper khỏe mạnh mới chạy
+    ports:
+      - "${BROKER_PORT}:${BROKER_PORT}" # Cổng chính cho client kết nối (host_port:container_port)
+      - "${METRIC_BROKER_PORT}:${METRIC_BROKER_PORT}" # Cổng cho metrics (host_port:container_port)
+    healthcheck:
+      test: nc -z localhost ${BROKER_PORT} || exit -1 # Kiểm tra cổng 9092 có mở không
+      start_period: 15s
+      interval: 5s
+      timeout: 10s
+      retries: 10
+    env_file:
+      - env/.env.kafka
+
+  # SCHEMA REGISTRY - Quản lý định dạng dữ liệu
+  # Vai trò: Giống như "thư viện mẫu đơn"
+  # - Lưu trữ các định dạng dữ liệu (schema)
+  # - Đảm bảo dữ liệu gửi/nhận đúng định dạng
+  # - Giúp hệ thống không bị lỗi khi thay đổi cấu trúc dữ liệu
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.5.0
+    container_name: schema-registry
+    depends_on:
+      broker:
+        condition: service_healthy # Phải đợi Kafka broker sẵn sàng
+    ports:
+      - "${SCHEMA_REGISTRY_PORT}:${SCHEMA_REGISTRY_PORT}" # Cổng để truy cập Schema Registry (host_port:container_port)
+    healthcheck:
+      start_period: 10s
+      interval: 10s
+      retries: 20
+      # Kiểm tra bằng cách gọi API lấy danh sách schema
+      test: curl --user superUser:superUser --fail --silent --insecure http://localhost:${SCHEMA_REGISTRY_PORT}/subjects --output /dev/null || exit 1
+    env_file:
+      - env/.env.kafka
+
+  # Kafka Connect - Service để tích hợp Kafka với các hệ thống bên ngoài
+  # Chức năng: Kết nối Kafka với database ghi dữ liệu từ Kafka vào timescaledb, file systems, cloud services, etc.
+
+  connect:
+    image: confluentinc/cp-kafka-connect:7.5.0
+    container_name: connect
+    depends_on:
+      broker:
+        condition: service_healthy  # Đợi broker sẵn sàng
+      schema-registry:
+        condition: service_healthy  # Đợi schema registry sẵn sàng
+      zookeeper:
+        condition: service_healthy  # Đợi zookeeper sẵn sàng
+    ports:
+      - "${KAFKA_CONNECT_PORT}:${KAFKA_CONNECT_PORT}"  # REST API port để quản lý connectors
+    env_file:
+      - env/.env.kafka
+    volumes:
+      - $PWD/data_ingestion/kafka_connect/jars/:/etc/kafka-connect/jars  # Mount connector JARs
+
+  # DEBEZIUM - Công cụ theo dõi thay đổi database
+  # Vai trò: Giống như "camera an ninh" cho database
+  # - Theo dõi mọi thay đổi trong PostgreSQL (INSERT, UPDATE, DELETE)
+  # - Tự động gửi thông tin thay đổi vào Kafka
+  # - Đảm bảo không bỏ sót dữ liệu nào
+  debezium:
+    image: debezium/connect:1.9
+    container_name: debezium
+    depends_on:
+      broker:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+      zookeeper:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'curl',
+          '--silent',
+          '--fail',
+          '-X',
+          'GET',
+          'http://localhost:${DEBEZIUM_PORT}/connectors', # Kiểm tra API connector
+        ]
+      start_period: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "${DEBEZIUM_PORT}:${DEBEZIUM_PORT}" # Cổng API để quản lý connector (host_port:container_port)
+    env_file:
+      - env/.env.debezium
+
+  # DEBEZIUM UI - Giao diện web cho Debezium
+  # Vai trò: Giống như "remote control" cho Debezium
+  # - Tạo, sửa, xóa connector qua giao diện web
+  # - Xem trạng thái connector
+  # - Dễ sử dụng hơn là gọi API trực tiếp
+  debezium-ui:
+    image: debezium/debezium-ui:latest
+    container_name: debezium-ui
+    hostname: debezium-ui
+    depends_on:
+      debezium:
+        condition: service_healthy # Đợi Debezium sẵn sàng
+    ports:
+      - '${DEBEZIUM_UI_PORT}:${DEBEZIUM_UI_PORT}' # Truy cập web UI qua http://localhost:8080
+    env_file:
+      - env/.env.debezium
+
+  # CONTROL CENTER - Giao diện web quản lý
+  # Vai trò: Giống như "bảng điều khiển xe hơi"
+  # - Xem trạng thái của toàn bộ hệ thống
+  # - Giám sát topic, partition, consumer
+  # - Quản lý connector
+  control-center:
+    image: confluentinc/cp-enterprise-control-center:7.5.0
+    container_name: control-center
+    depends_on:
+      broker:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+      debezium:
+        condition: service_healthy # Đợi tất cả service khác sẵn sàng
+    ports:
+      - "${CONTROL_CENTER_PORT}:${CONTROL_CENTER_PORT}" # Truy cập web UI qua http://localhost:9021
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${CONTROL_CENTER_PORT}/healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    env_file:
+      - env/.env.kafka
+      
+  # POSTGRESQL - Database chính
+  # Vai trò: Nơi lưu trữ dữ liệu gốc
+  # - Chứa các bảng dữ liệu thực tế
+  # - Được cấu hình để hỗ trợ CDC (Change Data Capture)
+  # - Mọi thay đổi sẽ được Debezium theo dõi
+  postgresql:
+    image: postgres:13
+    # Cấu hình đặc biệt: bật chế độ logical replication
+    # Điều này cho phép Debezium "nghe" được các thay đổi
+    command: ['postgres', '-c', 'wal_level=logical']
+    container_name: postgresql
+    healthcheck:
+      # Kiểm tra database có kết nối được không
+      test: ['CMD', 'psql', '-U', 'project_de_user', -d, 'project_de_db', '-c', 'SELECT 1']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "${POSTGRE_HOST_PORT}:${POSTGRE_CONTAINER_PORT}" # Cổng chuẩn của PostgreSQL (host_port:container_port)
+    env_file: 
+      - env/.env.postgre
+    volumes: 
+      # Lưu dữ liệu vào volume để không bị mất khi restart
+      - postgres_data:/var/lib/postgresql/data
+  
+  
+# VOLUMES - Nơi lưu trữ dữ liệu lâu dài
+# Docker sẽ tạo một thư mục đặc biệt để lưu dữ liệu PostgreSQL
+# Dữ liệu sẽ không bị mất khi container restart
+volumes:
+  postgres_data:

@@ -1,0 +1,5 @@
+# python=3.9
+
+# Backend Dependencies
+-r backend/requirements.txt
+-r script/flink/requirements.txt
