@@ -68,8 +68,8 @@ class UserBehaviorSimulator:
                 'add_to_cart': 0.2,
                 'add_to_wishlist': 0.15,
                 'remove_from_cart': 0.1,
-                'place_order': 0.05,
-                'browse_category': 0.1
+                'place_order': 0.1,
+                'browse_category': 0.05
             }
             
             action = random.choices(
