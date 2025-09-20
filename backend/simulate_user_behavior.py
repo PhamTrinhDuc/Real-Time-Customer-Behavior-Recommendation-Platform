@@ -223,7 +223,7 @@ class UserBehaviorSimulator:
         order = Order(
             customer_id=customer.customer_id,
             total_price=total_price,
-            status="pending"
+            status="pending",
         )
         self.db.add(order)
         self.db.flush()  # Get order ID

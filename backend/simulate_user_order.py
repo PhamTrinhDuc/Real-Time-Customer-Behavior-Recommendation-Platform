@@ -86,7 +86,7 @@ class OrderSimulator:
             order = Order(
                 customer_id=customer.customer_id,
                 total_price=total_amount,
-                status='pending'
+                status='pending',
             )
             db.add(order)
             db.commit()
@@ -166,7 +166,7 @@ class OrderSimulator:
                     logger.info(f"Total orders created: {order_count}")
                 
                 # Sleep 3-5 giây
-                sleep_time = random.uniform(3, 5)
+                sleep_time = random.uniform(5, 8)
                 logger.info(f"Waiting {sleep_time:.2f} seconds before next order...")
                 time.sleep(sleep_time)
                 
