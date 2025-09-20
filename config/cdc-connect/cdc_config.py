@@ -14,7 +14,17 @@ config = {
     "database.dbname" : None,
     "plugin.name": "pgoutput",
     "database.server.name": "test",
-    "table.include.list": None
+    "table.include.list": None,
+
+    "decimal.handling.mode": "double",
+    "binary.handling.mode": "bytes",
+    "money.fraction.digits": "2",
+    
+    "transforms": "unwrap",
+    "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
+    "transforms.unwrap.drop.tombstones": "true",
+    "transforms.unwrap.delete.handling.mode": "rewrite",
+    "transforms.unwrap.add.fields": "op,table,lsn"
   }
 }
 
@@ -24,7 +34,7 @@ config['config']['database.port'] = env.get("POSTGRES_PORT", "")
 config['config']['database.dbname'] = env.get("POSTGRES_DB", "") 
 
 TABLE_NEEDED_CDC = ['customers', 'products', 'orders', 'order_items', 'categories', 'payment']
-SERVER_NAME = "ecommere-cdc"
+SERVER_NAME = "ecommerce-cdc"
 TABLE_NEEDED_CDC = ["public." + item for item in TABLE_NEEDED_CDC]
 config['config']['table.include.list'] = ",".join(TABLE_NEEDED_CDC)
 config['config']['database.server.name'] = SERVER_NAME
