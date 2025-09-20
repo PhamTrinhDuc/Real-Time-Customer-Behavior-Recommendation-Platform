@@ -36,9 +36,7 @@ def check_topics(topic_name, num_messages: int=5):
     if messages:
         print(f"✅ Tìm thấy {len(messages)} message(s) trong topic '{topic_name}':\n")
         for i, m in enumerate(messages[:1]):
-            print(f"[{i+1}] Offset={m['offset']}, Partition={m['partition']}")
-            print(f"      Key: {m['key']}")
-            print(f"      Value: {json.dumps(m['value'], indent=2, ensure_ascii=False)}")
+            print(f"      Value: {json.dumps(m['value']['payload'], indent=2, ensure_ascii=False)}")
             print("-" * 50)
     else:
         print(f"🟡 Không tìm thấy message nào trong topic '{topic_name}' (có thể trống hoặc hết thời gian chờ).")
@@ -52,7 +50,7 @@ if __name__ == "__main__":
   parser.add_argument(
     "-t",
     "--topic", 
-    default="ecommere-cdc.public.orders",
+    default="ecommere-cdc.public.order_items",
     help="Topic saved in Kafka",
   )
   args = parser.parse_args()
