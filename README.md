@@ -95,7 +95,7 @@ python backend/main.py
 ```shell
 bash config/cdc-connect/run.sh register_connector config/cdc-connect/postgresql-cdc.json
 ```
--You should see the output similar to the below example
+- You should see the output similar to the below example
 ```shell
 Registering a new connector from configs/postgresql-cdc.json
 HTTP/1.1 201 Created
@@ -121,6 +121,12 @@ bash config/cdc-connect/run.sh delete_connector ecommere-cdc
 python test/test_cdc.py
 ```
 - Access control-center-ui through link `http://localhost:9021`, Topic -> ecommere-cdc.public.customers -> messages: 
+- Or you can run the code snippet below to see the messages: 
+```bash
+python script/kafka_producer/check_kafka_topic.py
+# you can run with the assigned topic to view messages in topic
+python script/kafka_producer/check_kafka_topic.py --topic ecommere.public.orders
+```
 
 ![alt text](images/control-center-ui.png)
 
