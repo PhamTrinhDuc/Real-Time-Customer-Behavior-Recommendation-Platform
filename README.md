@@ -120,7 +120,7 @@ bash config/cdc-connect/run.sh delete_connector ecommere-cdc
 ```bash
 python test/test_cdc.py
 ```
-- Access control-center-ui through link `http://localhost:9021`, Topic -> ecommere-cdc.public.customers -> messages: 
+- Access control-center-ui via link `http://localhost:9021`, Topic -> ecommere-cdc.public.customers -> messages: 
 - Or you can run the code snippet below to see the messages: 
 ```bash
 python script/kafka_producer/check_kafka_topic.py
@@ -132,3 +132,31 @@ python script/kafka_producer/check_kafka_topic.py --topic ecommere.public.orders
 
 ## 3. Flink jobs
 ### 3.1 Configuration 
+
+### 3.x Troubleshooting
+#### 3.x.1: CDC PostgreSQL Decimal to Base64 Issue
+- Debezium CDC converts PostgreSQL decimal/numeric fields to Base64 strings instead of numbers.
+```bash
+// Expected: "total_price": 638807.
+// Actual:   "total_price": "ARMyI/A="
+```
+> Solution: Fix Connector Configuration
+```bash
+{
+    "name": "ecommerce-cdc",
+    "config": {
+        "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+        // ... other configs ...
+        
+        // Add these at connector level (not in transforms)
+        "decimal.handling.mode": "double",
+        "binary.handling.mode": "bytes",
+        "money.fraction.digits": "2",
+        
+        "transforms": "unwrap",
+        "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
+        // Remove decimal configs from here
+    }
+}
+```bash
+
