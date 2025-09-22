@@ -5,7 +5,7 @@ from datetime import datetime
 from models.customer import Customer
 from models.product import Product
 from models.cart import Cart
-from models.order import Order
+from models.order import Order, OrderItem
 from models.payment import Payment
 from models.shipment import Shipment
 from utils.database import SessionLocal
@@ -91,6 +91,18 @@ class OrderSimulator:
             db.add(order)
             db.commit()
             db.refresh(order)
+            
+            # Tạo OrderItems cho từng sản phẩm trong giỏ hàng
+            for cart_item in cart_items:
+                order_item = OrderItem(
+                    order_id=order.order_id,
+                    product_id=cart_item['product_id'],
+                    quantity=cart_item['quantity'],
+                    price=cart_item['price']
+                )
+                db.add(order_item)
+            
+            db.commit()  # Commit order items
             
             # Tạo thanh toán
             payment_methods = ['credit_card', 'debit_card', 'paypal', 'bank_transfer']
