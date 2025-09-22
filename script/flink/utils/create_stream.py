@@ -1,15 +1,14 @@
 from pyflink.datastream import StreamExecutionEnvironment
-from pyflink.datastream.functions import MapFunction
-from pyflink.datastream.connectors.kafka import KafkaSource, KafkaOffsetsInitializer
+from pyflink.datastream.connectors.kafka import (
+  KafkaSource, 
+  KafkaOffsetsInitializer, 
+  KafkaRecordSerializationSchema,  
+  KafkaSink, 
+  DeliveryGuarantee
+)
 from pyflink.common.serialization import SimpleStringSchema
-# from pyflink.datastream.formats.json import JsonRowDeserializationSchema
-from pyflink.common.typeinfo import Types
 from pyflink.common.watermark_strategy import WatermarkStrategy
-from pyflink.common import Duration
-from pyflink.datastream.window import TumblingEventTimeWindows
-from pyflink.common.time import Time
 import os
-import json
 
 JARS_PATH = f"{os.getcwd()}/config/kafka-connect/jars/"
 BOOTSTRAP_SERVERS = "localhost:9092"
@@ -48,11 +47,28 @@ def create_kafka_source(topic: str, group_id: str, source_name: str):
 
     print("Kafka source created successfully.")
 
+    # debug
+    # raw_stream.map(lambda x: print(f"📩 Received: {x}")) 
+    # env.execute("Test Kafka Source")
+    
     return env, raw_stream
   except Exception as e: 
     print("Error creating Kafka source:", e)
     raise e
 
 
-def create_sink_kafka(): 
-  pass
+def create_sink_kafka(topic: str): 
+  sink = (
+    KafkaSink.builder()
+    .set_bootstrap_servers(BOOTSTRAP_SERVERS)    # Địa chỉ Kafka broker
+    .set_delivery_guarantee(DeliveryGuarantee.AT_LEAST_ONCE)  # Thêm delivery guarantee
+    .set_record_serializer(
+        KafkaRecordSerializationSchema.builder()
+        .set_topic(topic)                # Topic đích để ghi dữ liệu
+        .set_value_serialization_schema(SimpleStringSchema())  # Serializer cho dữ liệu
+        .build()
+    )
+    .build()
+  )
+
+  return sink
