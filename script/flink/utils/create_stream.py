@@ -6,9 +6,11 @@ from pyflink.datastream.connectors.kafka import (
   KafkaSink, 
   DeliveryGuarantee
 )
+from pyflink.datastream.functions import SinkFunction
 from pyflink.common.serialization import SimpleStringSchema
 from pyflink.common.watermark_strategy import WatermarkStrategy
 import os
+import requests
 
 JARS_PATH = f"{os.getcwd()}/config/kafka-connect/jars/"
 BOOTSTRAP_SERVERS = "localhost:9092"
@@ -70,5 +72,12 @@ def create_sink_kafka(topic: str):
     )
     .build()
   )
-
   return sink
+
+class HttpSinkFunction(SinkFunction):
+  def invoke(self, value, context):
+    requests.post(
+      url='http://localhost:8080/api/enrich-data',
+      json=value,
+      timeout=5
+    )
