@@ -2,7 +2,6 @@ import os
 import pandas as pd
 import psycopg2
 from minio import Minio
-from io import BytesIO
 import shutil
 from pathlib import Path
 from deltalake.writer import write_deltalake
@@ -148,6 +147,7 @@ def pandas_to_minio():
             )
             
             # Upload toàn bộ Delta table lên MinIO
+            print(f"📤 Uploading {table} to MinIO...")
             success = upload_delta_table_to_minio(
                 minio_client=minio_client,
                 local_path=table_path,
