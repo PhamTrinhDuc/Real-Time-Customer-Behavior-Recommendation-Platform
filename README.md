@@ -4,6 +4,7 @@
 1. [Generate database](#1-Generate-dataset)
 2. [Configuration Capture Data Changes](#2-Configuration-capture-data-changes)
 3. [Flink jobs](#3-flink-jobs)
+4. [Spark jobs](#4-spark-jobs)
 
 ## 1. Generate dataset
 ### 1.1 Prerequisites
@@ -182,6 +183,7 @@ export WEBHOOK_URL="your_webhook_url_for_alerts"
   - Alert logs to file system (`/tmp/flink_output`)
 
 **Features**:
+- Record the results in Kafka (topic `statistics_top_product`)
 - Real-time stream processing with event time windows
 - Watermark handling for late-arriving events
 - Custom fraud detection algorithms
@@ -200,6 +202,7 @@ export WEBHOOK_URL="your_webhook_url_for_alerts"
 - **Output**: Processed statistics to Kafka topic or file
 
 **Key Features**:
+- Record the results in Kafka (topic `statistics_revenue`)
 - Tumbling time windows for revenue aggregation
 - Custom reduce functions for efficient calculations
 - Window-based statistics with timestamp information
@@ -242,48 +245,25 @@ export WEBHOOK_URL="your_webhook_url_for_alerts"
 - Watermark strategies
 
 ### 3.4 Running Flink Jobs
-
-#### 3.4.1 Run Individual Jobs
+#### 3.4.1 Run Jobs
 ```bash
 # Fraud Detection Job
 python script/flink/fraud_detection/fraud_detection_order.py
-
 # Revenue Statistics Job  
 python script/flink/statistics/statistics_revenue.py
-
 # Top Products Analysis Job
 python script/flink/statistics/statistics_top_product.py
-```
-
-#### 3.4.2 Run All Jobs
-```bash
 # Execute all Flink jobs
 bash script/flink/run.sh
 ```
 
-#### 3.4.3 Docker Deployment
+#### 3.4.2 Docker Deployment
 ```bash
 # Deploy Flink jobs using Docker Compose
 docker-compose -f script/flink/docker-compose-job-flink.yml up -d
 ```
 
-### 3.5 Monitoring and Debugging
-
-#### 3.5.1 Flink Web UI
-- Access Flink Dashboard: `http://localhost:8081`
-- Monitor job status, metrics, and performance
-- View task manager and job manager logs
-
-#### 3.5.2 Job Logs
-```bash
-# Check job execution logs
-tail -f /tmp/flink_output/*
-
-# Monitor alert outputs
-tail -f logs/fraud_alerts.log
-```
-
-#### 3.5.3 Kafka Topic Monitoring
+#### 3.4.3 Kafka Topic Monitoring
 - Access control center via `localhost:9021`
 - or run script:  
 ```bash
@@ -292,24 +272,8 @@ python script/kafka_producer/check_kafka_topic.py --topic flink_revenue_stats
 python script/kafka_producer/check_kafka_topic.py --topic flink_top_products
 ```
 
-### 3.6 Configuration Options
-
-#### 3.6.1 Job Parameters
-- **Window Size**: Configurable time windows (1min, 5min, 1hour)
-- **Parallelism**: Adjust based on data volume and cluster resources
-- **Checkpointing**: Enable for fault tolerance
-- **Watermark Strategy**: Configure for late event handling
-
-#### 3.6.2 Performance Tuning
-```python
-# Example configuration in job files
-env.set_parallelism(4)
-env.enable_checkpointing(60000)  # 1 minute checkpoints
-env.get_checkpoint_config().set_checkpointing_mode(CheckpointingMode.EXACTLY_ONCE)
-```
-
-### 3.7 Troubleshooting
-#### 3.7.1: CDC PostgreSQL Decimal to Base64 Issue
+### 3.5 Troubleshooting
+#### 3.5.1: CDC PostgreSQL Decimal to Base64 Issue
 - Debezium CDC converts PostgreSQL decimal/numeric fields to Base64 strings instead of numbers.
 ```bash
 // Expected: "total_price": 638807.
@@ -333,5 +297,6 @@ env.get_checkpoint_config().set_checkpointing_mode(CheckpointingMode.EXACTLY_ONC
         // Remove decimal configs from here
     }
 }
-```bash
+```
 
+## 4. Spark jobs
