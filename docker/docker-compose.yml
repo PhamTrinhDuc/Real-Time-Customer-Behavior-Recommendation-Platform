@@ -186,9 +186,49 @@ services:
       # Lưu dữ liệu vào volume để không bị mất khi restart
       - postgres_data:/var/lib/postgresql/data
   
+  # Expose service to get metadata, which is a repository of metadata about the tables, 
+  # such as database names, table names, schema and data location of each table
+  hive-metastore:
+    container_name: hive-metastore
+    image: 'starburstdata/hive:3.1.2-e.18'
+    hostname: hive-metastore
+    ports:
+      - '${HIVE_METASTORE_PORT}:${HIVE_METASTORE_PORT}' # Access via Thrift protocol
+    env_file:
+      - env/.env.hive-metastore
+    depends_on:
+      - postgresql
+
+  trino:
+    ports:
+      - "${TRINO_PORT}:${TRINO_PORT}"
+    container_name: trino
+    image: "trinodb/trino:410"
+    hostname: trino
+    volumes:
+      - ./trino/etc:/usr/lib/trino/etc:ro
+      - ./trino/catalog:/etc/trino/catalog
+    depends_on:
+      - hive-metastore
+      
+  # Parquet files stored in MinIO object storage
+  minio:
+    image: minio/minio
+    container_name: minio
+    hostname: minio
+    ports:
+      - "${MINIO_PORT}:${MINIO_PORT}" # For API requests
+      - "${MINIO_UI_PORT}:${MINIO_UI_PORT}" # For UI access
+    volumes:
+      - minio_storage:/data
+    env_file:
+      - env/.env.minio
+    command: server --console-address ":${MINIO_UI_PORT}" /data
+  
   
 # VOLUMES - Nơi lưu trữ dữ liệu lâu dài
 # Docker sẽ tạo một thư mục đặc biệt để lưu dữ liệu PostgreSQL
 # Dữ liệu sẽ không bị mất khi container restart
 volumes:
   postgres_data:
+  minio_storage:
