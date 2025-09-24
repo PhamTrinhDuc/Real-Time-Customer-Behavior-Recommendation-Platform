@@ -201,7 +201,7 @@ services:
 
   trino:
     ports:
-      - "${TRINO_PORT}:${TRINO_PORT}"
+      - "${TRINO_HOST_PORT}:${TRINO_CONTAINER_PORT}"
     container_name: trino
     image: "trinodb/trino:410"
     hostname: trino
