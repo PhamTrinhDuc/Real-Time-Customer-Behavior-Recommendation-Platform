@@ -1,0 +1,2 @@
+minio==7.1.16
+deltalake==0.10.2
