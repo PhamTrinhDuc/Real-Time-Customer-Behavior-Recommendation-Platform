@@ -1,7 +1,7 @@
 # READL TIME CUSTOMER BEHAVIOR RECOMMENDATION PLATFORM
 
 ## TABLE OF CONTENTS: 
-### 0. [Introduction](#readl-time-customer-behavior-recommendation-platform)
+### 0. [Introduction](#real-time-customer-behavior-recommendation-platform)
 ### 1. [Generate Dataset](#1-generate-dataset)
   - [1.1 Prerequisites](#11-prerequisites)
   - [1.2 Database Schema](#12-database-schema)
