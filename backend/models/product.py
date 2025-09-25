@@ -35,7 +35,7 @@ class Product(Base):
     category_id = Column(Integer, ForeignKey("categories.category_id"))
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     # Relationships
     category = relationship("Category", back_populates="products")

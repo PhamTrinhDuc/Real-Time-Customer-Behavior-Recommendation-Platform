@@ -21,7 +21,7 @@ class Shipment(Base):
     tracking_number = Column(String(100), unique=True)
     customer_id = Column(Integer, ForeignKey("customers.customer_id"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     # Relationships
     customer = relationship("Customer", back_populates="shipments")

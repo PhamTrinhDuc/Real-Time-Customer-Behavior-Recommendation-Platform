@@ -23,7 +23,7 @@ class Customer(Base):
     address = Column(String(100))
     phone_number = Column(String(100))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     # Relationships
     orders = relationship("Order", back_populates="customer")
