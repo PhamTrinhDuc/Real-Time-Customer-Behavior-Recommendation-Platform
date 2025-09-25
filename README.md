@@ -1,10 +1,35 @@
 # READL TIME CUSTOMER BEHAVIOR RECOMMENDATION PLATFORM
 
 ## TABLE OF CONTENTS: 
-1. [Generate database](#1-Generate-dataset)
-2. [Configuration Capture Data Changes](#2-Configuration-capture-data-changes)
-3. [Flink jobs](#3-flink-jobs)
-4. [Spark jobs](#4-spark-jobs)
+1. [Introduction](#readl-time-customer-behavior-recommendation-platform)
+2. [Generate Dataset](#1-generate-dataset)
+  - [Prerequisites](#11-prerequisites)
+  - [Database Schema](#12-database-schema)
+  - [Entity Diagram](#13-entity-diagram)
+  - [Database Management](#13-database-management)
+  - [Generate Database](#15-generate-database)
+  - [User Behavior Simulation](#16-user-behavior-simulation)
+  - [Check Data Via API](#17-check-the-data-via-the-api)
+3. [Configuration for Capturing Data Changes](#2-configuration-capture-data-changes)
+  - [Debezium Setup with PostgreSQL](#21-connect-debezium-with-postgresql-to-receive-any-updates-from-the-database)
+  - [Testing Data Change Capture](#22-test-capture-change-data)
+4. [Flink Jobs](#3-flink-jobs)
+  - [Configuration](#31-configuration)
+  - [Available Flink Jobs](#32-available-flink-jobs)
+    - [Fraud Detection Job](#321-fraud-detection-job)
+    - [Revenue Statistics Job](#322-revenue-statistics-job)
+    - [Top Products Analysis Job](#323-top-products-analysis-job)
+  - [Utility Components](#33-utility-components)
+  - [Running Flink Jobs](#34-running-flink-jobs)
+  - [Troubleshooting](#35-troubleshooting)
+5. [Trino Query Engine](#4-trino-query-engine)
+  - [Architecture Overview](#41-architecture-overview)
+  - [Configuration Setup](#42-configuration-setup)
+  - [Data Pipeline: PostgreSQL to MinIO](#43-data-pipeline-postgresql-to-minio)
+  - [Schema Registration and Table Management](#44-schema-registration-and-table-management)
+  - [Analytics and Query Examples](#45-analytics-and-query-examples)
+  - [Performance Optimization](#46-performance-optimization)
+  - [Troubleshooting](#47-troubleshooting)
 
 ## 1. Generate dataset
 ### 1.1 Prerequisites
@@ -91,7 +116,7 @@ python simulate_user_behavior.py --historical 30
 # Delete all data
 python simulate_user_behavior.py --clear
 ```
-### 1.7 Check the data through the API: 
+### 1.7 Check the data via the API: 
 - Run fastapi app and access to `http://localhost:8000/docs`: 
 ```bash
 python backend/main.py
@@ -307,7 +332,7 @@ Trino serves as the distributed SQL query engine for our real-time recommendatio
 
 **Key Components**:
 - **Trino**: Distributed SQL query engine for analytics
-- **Hive Metastore**: Metadata service for table schemas and locations
+- **Hive Metastore**: Management services for tables, schemas, metadata, location, etc.
 - **MinIO**: S3-compatible object storage for data files
 - **PostgreSQL**: Metadata storage backend for Hive Metastore
 
@@ -620,8 +645,8 @@ CREATE TABLE de.ecommerce.orders_partitioned (
 ```
 </details>
 
-### 4.8 Troubleshooting
-#### 4.8.1 Common Issues and Solutions
+### 4.7 Troubleshooting
+#### 4.7.1 Common Issues and Solutions
 
 **Issue 1: Data Type Mismatches**
 - **Problem**: `updated_at` column appears as string instead of timestamp
