@@ -299,4 +299,360 @@ python script/kafka_producer/check_kafka_topic.py --topic flink_top_products
 }
 ```
 
-## 4. Spark jobs
+## 4. Trino Query Engine
+Trino serves as the distributed SQL query engine for our real-time recommendation platform, enabling high-performance analytics across data stored in MinIO object storage. It connects to Hive Metastore for metadata management and provides ANSI SQL interface for complex analytical queries.
+
+### 4.1 Architecture Overview
+![images/trino-query.png](images/trino-query.png)
+
+**Key Components**:
+- **Trino**: Distributed SQL query engine for analytics
+- **Hive Metastore**: Metadata service for table schemas and locations
+- **MinIO**: S3-compatible object storage for data files
+- **PostgreSQL**: Metadata storage backend for Hive Metastore
+
+### 4.2 Configuration Setup
+
+#### 4.2.1 Trino Configuration
+Create a `trino` folder at the same level as the `docker-compose.yml` file. Use the provided `trino-example` as a template:
+
+```bash
+# Copy example configuration
+cp -r docker/trino-example docker/trino
+```
+
+**Folder Structure**:
+```
+docker/trino/
+├── etc/
+│   ├── config.properties      # Trino server configuration
+│   ├── node.properties        # Node-specific settings
+│   └── jvm.config            # JVM memory settings
+└── catalog/
+    └── de.properties         # Data catalog configuration
+```
+
+#### 4.2.2 Catalog Configuration (`trino/catalog/de.properties`)
+Configure the Hive connector to connect with MinIO and Hive Metastore:
+
+```properties
+connector.name=hive
+# Hive Metastore connection
+hive.metastore.uri=thrift://hive-metastore:9083
+# MinIO object storage configuration
+hive.s3.endpoint=http://minio:9000
+hive.s3.aws-access-key=your_minio_access_key
+hive.s3.aws-secret-key=your_minio_secret_key
+...
+```
+> **Note**: Replace `your_minio_access_key` and `your_minio_secret_key` with actual MinIO credentials from your environment variables.
+
+#### 4.2.3 Environment Variables Setup
+Ensure the following environment variables are correctly set in `env/.env.hive-metastore`:
+
+```bash
+# PostgreSQL connection for Hive Metastore
+POSTGRES_USER=project_de_user
+POSTGRES_PASSWORD=project_de_password  
+POSTGRES_DB=project_de_db
+
+# MinIO credentials (should match with MinIO service)
+MINIO_ACCESS_KEY=your_access_key
+MINIO_SECRET_KEY=your_secret_key
+```
+
+#### 4.2.4 Hive Metastore Schema Creation
+Create a dedicated schema in PostgreSQL for Hive Metastore metadata:
+
+```bash
+# Connect to PostgreSQL container
+docker exec -it postgresql psql -U <POSTGRES_USER> -d <POSRGRES_DB>
+# Create metastore schema
+CREATE SCHEMA IF NOT EXISTS metastore;
+# Grant necessary permissions
+GRANT ALL PRIVILEGES ON SCHEMA metastore TO <POSRGRES_DB>;
+```
+
+### 4.3 Data Pipeline: PostgreSQL to MinIO
+#### 4.3.1 Data Extraction and Loading
+The pipeline extracts data from PostgreSQL, converts it to Parquet format, and uploads to MinIO for efficient querying:
+
+```bash
+# Navigate to data processing folder
+cd script/processer_data
+
+# Install required packages
+pip install -r requirements.txt
+
+# Extract and upload data to MinIO
+python pandas_to_minio.py --tables customers,products,categories,orders,order_items,payments
+```
+
+#### 4.3.2 Data Processing Features
+The `pandas_to_minio.py` script provides:
+- **Delta Lake Integration**: Stores data in Delta format for ACID transactions
+- **Automatic Schema Detection**: Handles data type conversions
+- **Incremental Updates**: Supports batch and streaming data updates
+- **Data Quality Checks**: Validates data integrity before upload
+
+**Key Functions**:
+```python
+# Upload specific tables
+python pandas_to_minio.py --tables products,categories
+
+# Clear bucket (for testing)
+python pandas_to_minio.py --clear_bucket ecommerce
+
+# Process all tables with default configuration
+python pandas_to_minio.py
+```
+
+### 4.4 Schema Registration and Table Management
+#### 4.4.1 Schema and Database Creation
+Connect to Trino using a SQL client (DBeaver, Trino CLI, or any SQL IDE) and create the database schema:
+
+```sql
+-- Create ecommerce schema in MinIO bucket
+CREATE SCHEMA IF NOT EXISTS de.ecommerce
+WITH (location = 's3://ecommerce/');
+
+-- Verify schema creation
+SHOW SCHEMAS IN de;
+```
+
+#### 4.4.2 Table Registration
+Register external tables that point to Parquet files stored in MinIO:
+
+<details>
+<summary>Query script </summary>
+
+```sql
+-- Products Table
+CREATE TABLE IF NOT EXISTS de.ecommerce.products (
+    product_id      INTEGER,
+    sku             VARCHAR(100),
+    name            VARCHAR(100),
+    description     VARCHAR(255),
+    price           DOUBLE,
+    stock           INTEGER,
+    category_id     INTEGER,
+    is_active       BOOLEAN,
+    created_at      TIMESTAMP,
+    updated_at      TIMESTAMP
+) WITH (
+    external_location = 's3://ecommerce/data_postgres/products',
+    format = 'PARQUET'
+);
+
+-- Categories Table
+CREATE TABLE IF NOT EXISTS de.ecommerce.categories (
+    category_id   INTEGER,
+    name          VARCHAR(100),
+    description   VARCHAR(500),
+    created_at    TIMESTAMP
+) WITH (
+    external_location = 's3://ecommerce/data_postgres/categories/',
+    format = 'PARQUET'
+);
+
+-- Customers Table  
+CREATE TABLE IF NOT EXISTS de.ecommerce.customers (
+    customer_id   INTEGER,
+    first_name    VARCHAR(100),
+    last_name     VARCHAR(100),
+    email         VARCHAR(100),
+    password      VARCHAR(255),
+    address       VARCHAR(255),
+    phone_number  VARCHAR(20),
+    created_at    TIMESTAMP,
+    updated_at    TIMESTAMP
+) WITH (
+    external_location = 's3://ecommerce/data_postgres/customers/',
+    format = 'PARQUET'
+);
+
+-- Orders Table
+CREATE TABLE IF NOT EXISTS de.ecommerce.orders (
+    order_id     INTEGER,
+    order_date   TIMESTAMP,
+    total_price  DOUBLE,
+    status       VARCHAR(50),
+    customer_id  INTEGER,
+    payment_id   INTEGER,
+    shipment_id  INTEGER
+) WITH (
+    external_location = 's3://ecommerce/data_postgres/orders/',
+    format = 'PARQUET'
+);
+
+-- Order Items Table
+CREATE TABLE IF NOT EXISTS de.ecommerce.order_items (
+    order_item_id INTEGER,
+    quantity      INTEGER,
+    price         DOUBLE,
+    order_id      INTEGER,
+    product_id    INTEGER
+) WITH (
+    external_location = 's3://ecommerce/data_postgres/order_items/',
+    format = 'PARQUET'
+);
+
+-- Payments Table
+CREATE TABLE IF NOT EXISTS de.ecommerce.payments (
+    payment_id      INTEGER,
+    payment_date    TIMESTAMP,
+    payment_method  VARCHAR(100),
+    amount          DOUBLE,
+    status          VARCHAR(50),
+    transaction_id  VARCHAR(100),
+    customer_id     INTEGER
+) WITH (
+    external_location = 's3://ecommerce/data_postgres/payments/',
+    format = 'PARQUET'
+);
+```
+</details>
+
+- In Dbeaver, after connecting to Trino (user: trino, no password), you will see an interface like the one below:
+![alt text](images/dbeaver-ui.png)
+
+#### 4.4.3 Data Validation
+Verify tables are created and data is accessible:
+
+```sql
+-- List all tables in the schema
+SHOW TABLES IN de.ecommerce;
+
+-- Verify data in each table
+SELECT COUNT(*) FROM de.ecommerce.products;
+SELECT COUNT(*) FROM de.ecommerce.customers;
+SELECT COUNT(*) FROM de.ecommerce.orders;
+
+-- Sample data queries
+SELECT * FROM de.ecommerce.products LIMIT 5;
+SELECT * FROM de.ecommerce.customers LIMIT 5;
+```
+### 4.5 Analytics and Query Examples
+<details>
+<summary>Query script </summary>
+
+#### 4.5.1 Customer Analytics
+```sql
+-- Customer segmentation by order value
+SELECT 
+    c.customer_id,
+    c.first_name,
+    c.last_name,
+    COUNT(o.order_id) as total_orders,
+    SUM(o.total_price) as total_spent,
+    AVG(o.total_price) as avg_order_value,
+    CASE 
+        WHEN SUM(o.total_price) > 10000 THEN 'High Value'
+        WHEN SUM(o.total_price) > 5000 THEN 'Medium Value'
+        ELSE 'Low Value'
+    END as customer_segment
+FROM de.ecommerce.customers c
+LEFT JOIN de.ecommerce.orders o ON c.customer_id = o.customer_id
+GROUP BY c.customer_id, c.first_name, c.last_name
+ORDER BY total_spent DESC;
+```
+
+#### 4.5.2 Product Performance Analysis
+```sql
+-- Top selling products with category information
+SELECT 
+    p.name as product_name,
+    cat.name as category_name,
+    SUM(oi.quantity) as total_quantity_sold,
+    SUM(oi.quantity * oi.price) as total_revenue,
+    COUNT(DISTINCT o.customer_id) as unique_customers
+FROM de.ecommerce.products p
+JOIN de.ecommerce.categories cat ON p.category_id = cat.category_id
+JOIN de.ecommerce.order_items oi ON p.product_id = oi.product_id
+JOIN de.ecommerce.orders o ON oi.order_id = o.order_id
+WHERE o.status = 'completed'
+GROUP BY p.name, cat.name
+ORDER BY total_revenue DESC
+LIMIT 10;
+```
+
+#### 4.5.3 Revenue Trend Analysis
+```sql
+-- Monthly revenue trends
+SELECT 
+    DATE_TRUNC('month', o.order_date) as order_month,
+    COUNT(DISTINCT o.order_id) as total_orders,
+    SUM(o.total_price) as monthly_revenue,
+    COUNT(DISTINCT o.customer_id) as unique_customers,
+    SUM(o.total_price) / COUNT(DISTINCT o.order_id) as avg_order_value
+FROM de.ecommerce.orders o
+WHERE o.status = 'completed'
+    AND o.order_date >= CURRENT_DATE - INTERVAL '12' MONTH
+GROUP BY DATE_TRUNC('month', o.order_date)
+ORDER BY order_month;
+```
+</details>
+
+### 4.6 Performance Optimization
+
+<details>
+<summary>Query script </summary>
+
+#### 4.6.1 Partitioning Strategy
+For large datasets, implement partitioning to improve query performance:
+
+```sql
+-- Create partitioned orders table by month
+CREATE TABLE de.ecommerce.orders_partitioned (
+    order_id     INTEGER,
+    order_date   TIMESTAMP,
+    total_price  DOUBLE,
+    status       VARCHAR(50),
+    customer_id  INTEGER,
+    payment_id   INTEGER,
+    shipment_id  INTEGER,
+    order_month  VARCHAR(7)  -- Partition column (YYYY-MM)
+) WITH (
+    external_location = 's3://ecommerce/data_postgres/orders_partitioned/',
+    format = 'PARQUET',
+    partitioned_by = ARRAY['order_month']
+);
+```
+</details>
+
+### 4.8 Troubleshooting
+#### 4.8.1 Common Issues and Solutions
+
+**Issue 1: Data Type Mismatches**
+- **Problem**: `updated_at` column appears as string instead of timestamp
+- **Root Cause**: SQLAlchemy column `updated_at = Column(DateTime(timezone=True), onupdate=func.now())` creates NULL values initially (`type: object`). When uploading data to Minio, this column is of String type, while the script above registers this column as a timestamp. Therefore, when querying, the data type between Minio and the registered table will not match.
+- **Solution**: Add `server_default=func.now()` to auto-populate timestamps:
+  ```python
+  updated_at = Column(DateTime(timezone=True), 
+                     onupdate=func.now(), 
+                     server_default=func.now())
+  ```
+- **Alternative**: Handle in pandas processing:
+  ```python
+  df['updated_at'] = pd.to_datetime(df['updated_at'], errors='coerce')
+  ```
+
+**Issue 2: Null Integer Columns**
+- **Problem**: `shipment_id` null values converted to float by pandas, causing type conflicts
+- **Root Cause**: Pandas converts null integers to float64
+- **Solutions**:
+  1. Remove null columns before upload
+  2. Use nullable integer types: `df['shipment_id'] = df['shipment_id'].astype('Int64')`
+  3. Fill nulls with default values: `df['shipment_id'].fillna(0)`
+
+**Issue 3: Connection Issues**
+```bash
+# Check Trino connectivity
+docker exec -it trino trino --server localhost:8080 --catalog de --schema ecommerce
+
+# Verify Hive Metastore connection
+docker logs hive-metastore
+
+# Check MinIO accessibility
+docker exec -it trino curl -f http://minio:9000/minio/health/live
+```
