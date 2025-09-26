@@ -114,6 +114,7 @@ class OrderSimulator:
                 transaction_id=f"TXN_{random.randint(100000, 999999)}"
             )
             db.add(payment)
+            order.status = "completed"
             db.commit()
             db.refresh(payment)
             
