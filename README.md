@@ -31,6 +31,9 @@
   - [4.6 Performance Optimization](#46-performance-optimization)
   - [4.7 Troubleshooting](#47-troubleshooting)
 
+### 5. [Spark Jobs](#5-spark-jobs)
+
+
 ## 1. Generate dataset
 ### 1.1 Prerequisites
 - Setup environment : 
@@ -51,7 +54,6 @@ docker compose -f docker/docker-compose-kafka.yml up -d
 ```
 
 ### 1.2 Database Schema
-
 The database includes the following entities based on the ERD:
 
 - **Customer**: User account information
@@ -681,3 +683,5 @@ docker logs hive-metastore
 # Check MinIO accessibility
 docker exec -it trino curl -f http://minio:9000/minio/health/live
 ```
+
+## 5. Spark Jobs
