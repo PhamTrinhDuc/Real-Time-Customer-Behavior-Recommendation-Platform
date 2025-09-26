@@ -1,8 +1,8 @@
 # READL TIME CUSTOMER BEHAVIOR RECOMMENDATION PLATFORM
 
 ## TABLE OF CONTENTS: 
-### 0. [Introduction](#real-time-customer-behavior-recommendation-platform)
-### 1. [Generate Dataset](#1-generate-dataset)
+## 0. [Introduction](#real-time-customer-behavior-recommendation-platform)
+## 1. [Generate Dataset](#1-generate-dataset)
   - [1.1 Prerequisites](#11-prerequisites)
   - [1.2 Database Schema](#12-database-schema)
   - [1.3 Entity Diagram](#13-entity-diagram)
@@ -10,10 +10,10 @@
   - [1.5 Generate Database](#15-generate-database)
   - [1.6 User Behavior Simulation](#16-user-behavior-simulation)
   - [1.7 Check Data Via API](#17-check-the-data-via-the-api)
-### 2. [Configuration for Capturing Data Changes](#2-configuration-capture-data-changes)
+## 2. [Configuration for Capturing Data Changes](#2-configuration-capture-data-changes)
   - [ 2.1 Debezium Setup with PostgreSQL](#21-connect-debezium-with-postgresql-to-receive-any-updates-from-the-database)
   - [2.2 Testing Data Change Capture](#22-test-capture-change-data)
-### 3. [Flink Jobs](#3-flink-jobs)
+## 3. [Flink Jobs Streaming](#3-flink-jobs)
   - [3.1 Configuration](#31-configuration)
   - [3.2 Available Flink Jobs](#32-available-flink-jobs)
     - [3.2.1 Fraud Detection Job](#321-fraud-detection-job)
@@ -22,7 +22,7 @@
   - [3.3 Utility Components](#33-utility-components)
   - [3.4 Running Flink Jobs](#34-running-flink-jobs)
   - [3.5 Troubleshooting](#35-troubleshooting)
-### 4. [Trino Query Engine](#4-trino-query-engine)
+## 4. [Trino Query Engine](#4-trino-query-engine)
   - [4.1 Architecture Overview](#41-architecture-overview)
   - [4.2 Configuration Setup](#42-configuration-setup)
   - [4.3 Data Pipeline: PostgreSQL to MinIO](#43-data-pipeline-postgresql-to-minio)
@@ -31,7 +31,7 @@
   - [4.6 Performance Optimization](#46-performance-optimization)
   - [4.7 Troubleshooting](#47-troubleshooting)
 
-### 5. [Spark Jobs](#5-spark-jobs)
+## 5. [Spark Jobs Batching](#5-spark-jobs)
 
 
 ## 1. Generate dataset
