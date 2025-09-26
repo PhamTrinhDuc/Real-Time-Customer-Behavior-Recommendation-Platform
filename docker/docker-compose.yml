@@ -82,7 +82,7 @@ services:
     env_file:
       - env/.env.kafka
     volumes:
-      - $PWD/data_ingestion/kafka_connect/jars/:/etc/kafka-connect/jars  # Mount connector JARs
+      - $PWD/config/kafka-connect/jars/:/etc/kafka-connect/jars  # Mount connector JARs
 
   # DEBEZIUM - Công cụ theo dõi thay đổi database
   # Vai trò: Giống như "camera an ninh" cho database
