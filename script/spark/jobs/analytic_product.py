@@ -1,6 +1,5 @@
 """
-Analysis Top 10 Product Spark Job
-
+Analytics Product Spark Job
 
 
 Author: Data Engineering Team
@@ -9,51 +8,20 @@ Created: 2025-09-26
 import os
 import sys
 from loguru import logger
-from datetime import datetime
+from collections import defaultdict
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from pyspark.sql import functions as F
-from pyspark.sql import DataFrame, SparkSession
+from pyspark.sql import DataFrame
 from spark_client import SparkClient
-from config.helpers import CommonConfig, ProductAnalyticConfig 
+from config.helpers import JobConfig, ProductAnalyticConfig
 from job_interface import JobInterface
 
 class ProductAnalyticJob(JobInterface): 
-  def __init__(self):
-    super.__init__()
+  def __init__(self, spark_client: SparkClient):
+    self.job_config = JobConfig(job_name=ProductAnalyticConfig.mart_name)
+    super().__init__(spark_client, self.job_config)
+    self.paconfig = ProductAnalyticConfig()
   
-  def _validate_dataframe(self, 
-                          dataframe: DataFrame, 
-                          df_name: str, 
-                          required_cols: list) -> bool: 
-    """
-    Validate dataframe structure and data quality
-    
-    Args:
-        df: DataFrame to validate
-        df_name: Name of the dataframe for logging
-        required_columns: List of required column names
-        
-    Returns:
-        bool: True if validation passes, False otherwise
-    """
-    try: 
-      if dataframe.count() == 0: 
-        logger.error(f"{df_name} dataframe is empty")
-        return False
-
-      df_cols = dataframe.columns
-      missing_cols = [col for col in required_cols if col not in df_cols]
-      if missing_cols: 
-        logger.error(f"{df_name} missing required columns: {missing_cols}")
-        return False
-
-      logger.info(f"{df_name} validation passed. Records: {dataframe.count()}")
-      return True
-    
-    except Exception as e: 
-      logger.error(f"Error validating {df_name}: {str(e)}")
-      return False
-    
   def extract_data(self) -> dict[str, DataFrame]: 
     """
     Extract orders, order_items, categories and customers data from MinIO
@@ -64,13 +32,20 @@ class ProductAnalyticJob(JobInterface):
     Raises:
       Exception: If data extraction fails
     """
-    tbl_list = ProductAnalyticConfig.TBL_LIST
+    tbl_list = self.paconfig.tbl_list
+    required_cols = self.paconfig.required_cols_dict
 
-    results = {}
+    results = defaultdict(DataFrame)
     for tbl in tbl_list: 
-      path = os.path.join(CommonConfig.DATA_SOURCE_PATH, tbl)
+      path = os.path.join(self.job_config.source_path, tbl)
       df = self.spark.read.parquet(path)
       results[tbl] = df
+
+      if not self._validate_dataframe(df=df, df_name=tbl, required_cols=required_cols[tbl]): 
+        msg = f"Table: {tbl} failed to validate "
+        self.logger.error(msg) 
+        raise ValueError(msg)
+
     logger.info(f"Extract tables: {results.keys()} sucessful")
     return results
 
@@ -79,10 +54,10 @@ class ProductAnalyticJob(JobInterface):
     Transform data into multiple business-focused tables
     Returns multiple DataFrames for different business needs
     """
-    order_df = tbl_extracted['orders'].alias("o")
-    order_item_df = tbl_extracted['order_items'].alias("oi")
-    category_df = tbl_extracted['categories'].alias("c")
-    product_df = tbl_extracted['products'].alias("p")
+    order_df = tbl_extracted["orders"].alias("o")
+    order_item_df = tbl_extracted["order_items"].alias("oi")
+    category_df = tbl_extracted["categories"].alias("c")
+    product_df = tbl_extracted["products"].alias("p")
 
     try: 
       logger.info("Starting data transformation for Analyze top 10 products")
@@ -118,7 +93,7 @@ class ProductAnalyticJob(JobInterface):
           "analysis_date"
         )
         .orderBy(F.desc("total_revenue"))
-        .limit(ProductAnalyticConfig.TOP_K)
+        .limit(self.paconfig.top_k)
       )
 
       # table 2: product pricing analytics
@@ -173,15 +148,23 @@ class ProductAnalyticJob(JobInterface):
       logger.error(f"Data transformation failed: {str(e)}")
       raise
 
-  def push_data_to_minio(self, tbl_transformed: dict[str, DataFrame]) -> None:
+  def load_data(self, tbl_transformed: dict[str, DataFrame]) -> None:
+    """
+    Load multiple tables to MinIO with proper partitioning
+    Interface method required by JobInterface
+    """
+    self.load_to_minio(tbl_transformed)
+
+  def load_to_minio(self, tbl_transformed: dict[str, DataFrame]) -> None:
     """
     Load multiple tables to MinIO with proper partitioning
     """
     try: 
       for tbl_name, df in tbl_transformed.items(): 
+
         output_path = os.path.join(
-          CommonConfig.DESTINATION_PATH, 
-          ProductAnalyticConfig.MART_NAME, 
+          self.job_config.destination_path, 
+          self.paconfig.mart_name, 
           tbl_name
         )
 
@@ -207,35 +190,29 @@ class ProductAnalyticJob(JobInterface):
         logger.info(f"✅ {tbl_name} loaded successfully. Records: {df.count()}")
 
     except Exception as e: 
-      logger.error(f"Data loading failed: {str(e)}")
-      raise
+      msg = f"Data loading failed: {str(e)}"
+      logger.error(msg)
+      raise ValueError(msg)
 
-  def run(self): 
-    """
-    Execute the complete analytics products job
+
+def main():
+  """
+  Main entry point for the customer segmentation job
+  """
+  try:
+    # Initialize Spark client
+    spark_client = SparkClient()
     
-    Raises:
-        Exception: If any step of the job fails
-    """
-    start_time = datetime.now()
-    logger.info(f"Starting Analytics Products Job at {start_time}")
+    # Create and run the segmentation job
+    job = ProductAnalyticJob(spark_client)
+    job.run()
     
-    try:
-      # Step 1: Extract data
-      tbl_extracted = self.extract_data()
+    logger.info("Analytics Products Job execution completed")
+      
+  except Exception as e:
+    logger.error(f"Job execution failed: {str(e)}")
+    sys.exit(1)
 
-      # Step 2: Transform data 
-      tbl_transformed = self.transform_data(tbl_extracted=tbl_extracted)
 
-      # Step 3: Load data to minio
-      self.push_data_to_minio(tbl_transformed=tbl_transformed)
-
-      end_time = datetime.now()
-      duration = end_time - start_time
-      logger.info(f"Analytics Products Job completed successfully in {duration}")
-    except Exception as e:
-        logger.error(f"Analytics Products Job failed: {str(e)}")
-        raise
-    finally:
-        # Clean up Spark session
-        self.spark_client.stop()
+if __name__ == "__main__": 
+  main()
