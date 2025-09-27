@@ -148,13 +148,6 @@ class ProductAnalyticJob(JobInterface):
       logger.error(f"Data transformation failed: {str(e)}")
       raise
 
-  def load_data(self, tbl_transformed: dict[str, DataFrame]) -> None:
-    """
-    Load multiple tables to MinIO with proper partitioning
-    Interface method required by JobInterface
-    """
-    self.load_to_minio(tbl_transformed)
-
   def load_to_minio(self, tbl_transformed: dict[str, DataFrame]) -> None:
     """
     Load multiple tables to MinIO with proper partitioning
@@ -177,7 +170,7 @@ class ProductAnalyticJob(JobInterface):
         else:
             partition_cols = ["analysis_date"]
         
-        logger.info(f"Writing {tbl_name} to {output_path}")
+        self.logger.info(f"Writing {tbl_name} to {output_path}")
         (
           df.write
           .format("parquet")
@@ -187,11 +180,11 @@ class ProductAnalyticJob(JobInterface):
           .parquet(output_path)
         )
 
-        logger.info(f"✅ {tbl_name} loaded successfully. Records: {df.count()}")
+        self.logger.info(f"✅ {tbl_name} loaded successfully. Records: {df.count()}")
 
     except Exception as e: 
       msg = f"Data loading failed: {str(e)}"
-      logger.error(msg)
+      self.logger.error(msg)
       raise ValueError(msg)
 
 

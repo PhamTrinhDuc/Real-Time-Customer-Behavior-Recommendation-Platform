@@ -64,13 +64,13 @@ class SegmentCusConfig:
     })
   
   # Customer segment thresholds (in VND)
-  HIGH_VALUE_THRES = 100_000_000  # 100M VND
-  MEDIUM_VALUE_THRES = 10_000_000  # 10M VND
+  high_value_thres = 100_000_000  # 100M VND
+  medium_value_thres = 10_000_000  # 10M VND
   
   # Segment labels
-  HIGH_VALUE_LABEL = "High Value"
-  MEDIUM_VALUE_LABEL = "Medium Value" 
-  LOW_VALUE_LABEL = "Low Value"
+  high_value_label = "High Value"
+  medium_value_label = "Medium Value" 
+  low_value_label = "Low Value"
 
 
 @dataclass

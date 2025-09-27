@@ -11,12 +11,13 @@ Created: 2025-09-26
 import os
 import sys
 from loguru import logger
+from collections import defaultdict
 from datetime import datetime
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from pyspark.sql import functions as F
 from pyspark.sql import DataFrame, SparkSession
 from spark_client import SparkClient
-from config.helpers import SegmentCusConfig, CommonConfig
+from config.helpers import SegmentCusConfig, JobConfig
 from job_interface import JobInterface
 
 class CustomerSegmentationJob(JobInterface):
@@ -29,71 +30,40 @@ class CustomerSegmentationJob(JobInterface):
   3. Data loading back to MinIO with partitioning
   """
 
-  def __init__(self): 
-    super.__init__()
+  def __init__(self, spark_client: SparkClient): 
+    self.job_config = JobConfig(job_name=SegmentCusConfig.mart_name)
+    super().__init__(spark_client=spark_client, config=self.job_config)
+    self.csjob = SegmentCusConfig()
 
-  def _validate_dataframe(self, df: DataFrame, df_name: str, required_cols: list) -> bool:
-    """
-    Validate dataframe structure and data quality
-    
-    Args:
-        df: DataFrame to validate
-        df_name: Name of the dataframe for logging
-        required_columns: List of required column names
-        
-    Returns:
-        bool: True if validation passes, False otherwise
-    """
-
-    try: 
-      if df.count() == 0: 
-        logger.error(f"{df_name} dataframe is empty")
-        return False
-
-      df_cols = df.columns
-      missing_cols = [col for col in required_cols if col not in df_cols]
-      if missing_cols: 
-        logger.error(f"{df_name} missing required columns: {missing_cols}")
-        return False
-
-      logger.info(f"{df_name} validation passed. Records: {df.count()}")
-      return True
-    
-    except Exception as e: 
-      logger.error(f"Error validating {df_name}: {str(e)}")
-      return False
-    
-  def extract_data(self) -> tuple[DataFrame, DataFrame]: 
+  def extract_data(self) -> dict[str, DataFrame]: 
     """
     Extract orders and customers data from MinIO
     
     Returns:
-      tuple: (orders_df, customers_df)
+      dict: (str, DataFrame)
         
     Raises:
       Exception: If data extraction fails
     """
 
-    order_path = os.path.join(CommonConfig.DATA_SOURCE_PATH, "orders")
-    order_df = self.spark.read.parquet(order_path)
-    logger.info(f"Extracted orders data from: {order_path}")
+    tbl_list = self.csjob.tbl_list
+    required_cols = self.csjob.required_cols_dict
 
-    customer_path = os.path.join(CommonConfig.DATA_SOURCE_PATH, "customers")
-    customer_df = self.spark.read.parquet(customer_path)
-    logger.info(f"Extracted customers data from: {customer_path}")
+    results = defaultdict(DataFrame)
+    for tbl in tbl_list: 
+      path = os.path.join(self.job_config.source_path, tbl)
+      df = self.spark.read.parquet(path)
+      results[tbl] = df
 
-    cus_required_cols = ['customer_id', 'last_name', 'email']
-    order_required_cols = ['customer_id', 'order_id', 'total_price']
+      if not self._validate_dataframe(df=df, df_name=tbl, required_cols=required_cols[tbl]): 
+        msg = f"Table: {tbl} failed to validate "
+        self.logger.error(msg) 
+        raise ValueError(msg)
 
-    if not self._validate_dataframe(order_df, "orders", order_required_cols):
-      raise ValueError("Orders data validation failed")
-                
-    if not self._validate_dataframe(customer_df, "customers", cus_required_cols):
-      raise ValueError("Customers data validation failed")
-    
-    return order_df, customer_df
+    self.logger.info(f"Extract tables: {results.keys()} sucessful")
+    return results
   
-  def transform_data(self, order_df: DataFrame, customer_df: DataFrame): 
+  def transform_data(self, df_extracted: dict[str, DataFrame]): 
     """
     Transform data to create customer segmentation
     
@@ -129,6 +99,10 @@ class CustomerSegmentationJob(JobInterface):
     #   ORDER BY total_spent DESC
     # """)
 
+
+    order_df = df_extracted['orders']
+    customer_df = df_extracted['customers']
+
     try: 
       logger.info("Starting data transformation for customer segmentation")
       # Join orders with customers and aggregate
@@ -151,13 +125,13 @@ class CustomerSegmentationJob(JobInterface):
         .withColumn(
           "customer_segment", 
           F.when(
-              F.col("total_spent") >= SegmentCusConfig.HIGH_VALUE_THRES, SegmentCusConfig.HIGH_VALUE_LABEL
+              F.col("total_spent") >= self.csjob.high_value_thres, self.csjob.high_value_label
           )
           .when(
-              F.col("total_spent") >= SegmentCusConfig.MEDIUM_VALUE_THRES, 
-              SegmentCusConfig.MEDIUM_VALUE_LABEL
+              F.col("total_spent") >= self.csjob.medium_value_thres, 
+              self.csjob.medium_value_label
           )
-          .otherwise(SegmentCusConfig.LOW_VALUE_LABEL)
+          .otherwise(self.csjob.low_value_label)
         )
         .withColumn("process_data", F.current_date())
       )
@@ -176,7 +150,7 @@ class CustomerSegmentationJob(JobInterface):
       )
 
       customer_segmentation = customer_segmentation.orderBy(F.desc("total_spent"))
-      logger.info("Data transformation completed successfully")
+      self.logger.info("Data transformation completed successfully")
 
       # Log segment distribution
       segment_counts = (
@@ -186,15 +160,15 @@ class CustomerSegmentationJob(JobInterface):
         .collect()
       )
       for row in segment_counts:
-        logger.info(f"Segment '{row.customer_segment}': {row.count} customers")
+        self.logger.info(f"Segment '{row.customer_segment}': {row.count} customers")
       
       return customer_segmentation
 
     except Exception as e: 
-      logger.error(f"Data transformation failed: {str(e)}")
+      self.logger.error(f"Data transformation failed: {str(e)}")
       raise
 
-  def push_data_to_minio(self, segment_df: DataFrame) -> None: 
+  def load_to_minio(self, segment_df: DataFrame) -> None: 
     """
     Load segmentation data to MinIO with partitioning
     
@@ -206,8 +180,8 @@ class CustomerSegmentationJob(JobInterface):
     """
 
     try: 
-      logger.info("Starting data loading to MinIO")
-      output_path = os.path.join(CommonConfig.DESTINATION_PATH, SegmentCusConfig.MART_NAME)
+      self.logger.info("Starting data loading to MinIO")
+      output_path = os.path.join(self.job_config.destination_path, self.csjob.mart_name)
       (
          segment_df.write
          .format("parquet")
@@ -217,11 +191,11 @@ class CustomerSegmentationJob(JobInterface):
          .parquet(output_path)
       )
 
-      logger.info(f"Data successfully loaded to: {output_path}")
-      logger.info(f"Total records written: {segment_df.count()}")
+      self.logger.info(f"Data successfully loaded to: {output_path}")
+      self.logger.info(f"Total records written: {segment_df.count()}")
       
     except Exception as e:
-      logger.error(f"Data loading failed: {str(e)}")
+      self.logger.error(f"Data loading failed: {str(e)}")
       raise
     
   def run(self) -> None: 
@@ -232,23 +206,23 @@ class CustomerSegmentationJob(JobInterface):
         Exception: If any step of the job fails
     """
     start_time = datetime.now()
-    logger.info(f"Starting Customer Segmentation Job at {start_time}")
+    self.logger.info(f"Starting Customer Segmentation Job at {start_time}")
     
     try:
       # Step 1: Extract data
-      orders_df, customers_df = self.extract_data()
+      df_extracted = self.extract_data()
       
       # Step 2: Transform data
-      segmentation_df = self.transform_data(orders_df, customers_df)
+      segmentation_df = self.transform_data(df_extracted=df_extracted)
       
       # Step 3: Load data
-      self.push_data_to_minio(segmentation_df)
+      self.load_to_minio(segmentation_df)
       
       end_time = datetime.now()
       duration = end_time - start_time
-      logger.info(f"Customer Segmentation Job completed successfully in {duration}")
+      self.logger.info(f"Customer Segmentation Job completed successfully in {duration}")
     except Exception as e:
-        logger.error(f"Customer Segmentation Job failed: {str(e)}")
+        self.logger.error(f"Customer Segmentation Job failed: {str(e)}")
         raise
     finally:
         # Clean up Spark session
