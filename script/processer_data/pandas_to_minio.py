@@ -140,7 +140,7 @@ def pandas_to_minio(minio_client, tables: list):
             # Upload toàn bộ Delta table lên MinIO
             print(f"Uploading {table} to MinIO...")
             success = upload_delta_table_to_minio(
-                minio_client=minio_client,
+                minio_client=minio_client.client,
                 local_path=table_path,
                 bucket_name=BUCKET_NAME,
                 table_name=table
