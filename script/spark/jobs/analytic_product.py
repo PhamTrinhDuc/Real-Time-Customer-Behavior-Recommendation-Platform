@@ -46,7 +46,7 @@ class ProductAnalyticJob(JobInterface):
         self.logger.error(msg) 
         raise ValueError(msg)
 
-    logger.info(f"Extract tables: {results.keys()} sucessful")
+    self.logger.info(f"Extract tables: {results.keys()} sucessful")
     return results
 
   def transform_data(self, tbl_extracted: dict[str, DataFrame]) -> dict[str, DataFrame]: 

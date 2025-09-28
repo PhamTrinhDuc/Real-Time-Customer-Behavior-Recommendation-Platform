@@ -87,3 +87,12 @@ class ProductAnalyticConfig:
     })
   top_k: int = 10
   
+@dataclass
+class RevenueStatConfig: 
+  mart_name: str = "revenue_statistics"
+  tbl_list: List[str] = \
+    field(default_factory=lambda: ["orders"])
+  required_cols_dict: Dict[str, List[str]] = \
+    field(default_factory=lambda: {
+      "orders": ["order_id", "total_price", "order_date", "customer_id"], 
+    })
