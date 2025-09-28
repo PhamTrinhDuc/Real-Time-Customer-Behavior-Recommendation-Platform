@@ -133,7 +133,7 @@ class CustomerSegmentationJob(JobInterface):
           )
           .otherwise(self.csjob.low_value_label)
         )
-        .withColumn("process_data", F.current_date())
+        .withColumn("process_date", F.current_date())
       )
 
       # Add additional business metrics

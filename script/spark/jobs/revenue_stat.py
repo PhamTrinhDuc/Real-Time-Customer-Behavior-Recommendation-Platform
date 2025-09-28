@@ -52,7 +52,7 @@ class RevenueaStatJob(JobInterface):
       revenue_daily = self._create_revenue_daily(order_df=order_df)
 
       result_tables =  {
-        "revene_monthly": revenue_montly, 
+        "revenue_monthly": revenue_montly, 
         "revenue_daily": revenue_daily
       }
     
