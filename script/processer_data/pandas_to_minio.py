@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Config
-LOCAL_DELTA_PATH = "./script/spark/delta_data"  # Local Delta Lake path
+LOCAL_DELTA_PATH = "./script/spark/processer_data/delta_data"  # Local Delta Lake path
 BUCKET_NAME = "ecommerce"
 FOLDER_NAME = "data_postgres"
 
