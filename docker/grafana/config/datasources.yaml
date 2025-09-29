@@ -1,0 +1,13 @@
+apiVersion: 1
+
+datasources:
+  - name: Trino
+    type: trino-datasource
+    url: http://trino:8080
+    access: proxy
+    basicAuth: false
+    isDefault: false
+    jsonData:
+      catalog: de
+      schema: ecommerce_stat
+    secureJsonData: {}
